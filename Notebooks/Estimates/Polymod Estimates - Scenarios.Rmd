@@ -1,0 +1,384 @@
+---
+title: "Estimates from Polymod Data"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r}
+library(socialmixr)
+library(dplyr)
+```
+
+## Modelling the probability of a within household contact
+
+```{r}
+data(polymod)
+```
+
+```{r}
+contacts = polymod$contacts
+participants = polymod$participants
+```
+
+```{r}
+# Join the participant data frame to the dataframe that stores contact data on the participant ID and filter to the United Kingdom
+uk_data = participants %>%
+  filter(country == "United Kingdom") %>%
+  left_join(contacts, by = "part_id")# %>%
+  #select(part_id, hh_size, cnt_home, frequency_multi)
+```
+
+We filter contacts down to those whom the age of the contact matches the contact of someone within the household.
+
+```{r}
+within_household_contacts = uk_data %>%
+  filter(cnt_home == 1 & # within household contacts must occur at home
+        frequency_multi == 1) %>% # contacts must be daily or weekly)
+  filter(
+    cnt_age_exact == hh_age_1 |
+    cnt_age_exact == hh_age_2 |
+    cnt_age_exact == hh_age_3 |
+    cnt_age_exact == hh_age_4 |
+    cnt_age_exact == hh_age_5 |
+    cnt_age_exact == hh_age_6)
+
+```
+
+Therefore, we know how many contacts ocurred to other members of the household.
+
+We need to know how many households of each size there were, then we are able to work out the probability of contacting a household member for each of the household sizes.
+
+```{r}
+number_houses_uk = participants %>%
+  filter(country == "United Kingdom") %>%
+  select(hh_size) %>%
+  group_by(hh_size) %>%
+  summarise(number_households = n())
+
+```
+
+```{r}
+contacts_house_size = number_houses_uk %>%
+  left_join(within_household_contacts, "hh_size") %>%
+  group_by(hh_size) %>%
+  summarise(number_contacts = n())
+contacts_house_size
+```
+```{r}
+hh_summary = number_houses_uk %>%
+  left_join(contacts_house_size) %>%
+  mutate(contact_prob = number_contacts / ((hh_size - 1)*number_households ))
+hh_summary
+```
+
+total_contact_means = [7.238, 10.133, 11.419, 12.844, 14.535, 15.844], see "Polymod Estimates - HH_sizes.Rmd".
+
+## Setting the the contact types:
+
+```{r}
+
+# We assign the local and global tags
+uk_data = uk_data %>%
+  # a contact is global if it occurs at home daily
+  mutate(local =
+    (cnt_home == 1 &
+     frequency_multi == 1) & 
+    # the age of a contact must match the age of another hh member
+    (cnt_age_exact == hh_age_1 |
+    cnt_age_exact == hh_age_2 |
+    cnt_age_exact == hh_age_3 |
+    cnt_age_exact == hh_age_4 |
+    cnt_age_exact == hh_age_5 |
+    cnt_age_exact == hh_age_6))
+```
+
+Assigning contact labels
+
+```{r}
+uk_data_contacts = uk_data %>%
+  mutate(local =
+    (cnt_home == 1 &
+     frequency_multi == 1) & 
+    # the age of a contact must match the age of another hh member
+    (cnt_age_exact == hh_age_1 |
+    cnt_age_exact == hh_age_2 |
+    cnt_age_exact == hh_age_3 |
+    cnt_age_exact == hh_age_4 |
+    cnt_age_exact == hh_age_5 |
+    cnt_age_exact == hh_age_6)) %>%
+  mutate(
+    work_travel =(cnt_work == 1 |cnt_transport == 1) & !local
+    ) %>%
+  mutate(
+    school = (cnt_school == 1 & !local)
+    ) %>%
+  mutate(
+    leisure = (cnt_leisure == 1 & !local)
+    ) %>%
+  mutate(
+    other = (cnt_otherplace == 1 & !local & !leisure)
+    ) %>%
+  left_join(number_houses_uk) %>%
+  group_by(hh_size) %>%
+  filter(!is.na(local) & !is.na(work_travel) & !is.na(school) & !is.na(leisure) & !is.na(other))
+```
+
+```{r}
+pre_lockdown_means = uk_data_contacts %>%
+  group_by(hh_size) %>%
+  summarise(
+    all=sum((local+work_travel+school+leisure+other)/number_households),
+    local = sum(local/number_households),
+    global = all - local,
+    work_travel = sum(work_travel/number_households),
+    school=sum(school/number_households),
+    leisure=sum(leisure/number_households),
+    other=sum(other/number_households))
+```
+
+```{r}
+post_lockdown_means = contact_means_hh_size %>%
+  group_by(hh_size) %>%
+  filter(week != 6) %>%
+  summarize(
+    all = mean(mean_all),
+    local = mean(mean_hh),
+    global = mean(mean_not_hh),
+    work = mean(mean_work),
+    school = mean(mean_school),
+    home = mean(mean_home),
+    not_home = mean(mean_not_home))
+
+# Get the mean difference vectors
+
+```
+
+
+```{r}
+delta_school = pre_lockdown_means$school[1:6] - post_lockdown_means$school[1:6]
+delta_work = pre_lockdown_means$work_travel[1:6] - post_lockdown_means$work[1:6]
+delta_leisure = pre_lockdown_means$leisure[1:6]
+```
+
+```{r}
+lockdown_global_contact_reduction = 1 - post_lockdown_means$global[1:6] / pre_lockdown_means$global[1:6]
+lockdown_global_contact_reduction
+```
+
+```{r}
+lockdown_global_contact_reduction = 1 - post_lockdown_means$global[1:6] / pre_lockdown_means$global[1:6]
+lockdown_global_contact_reduction
+
+```
+
+## TOTALLY ARBITRARY SCENARIO A:
+
+```{r}
+scenario_A = 1 - (post_lockdown_means$global[1:6] + 0.2*post_lockdown_means$work[1:6] + 0.1*delta_school)/ pre_lockdown_means$global[1:6]
+scenario_A
+```
+
+## Scenario B:
+
+```{r}
+scenario_B = 1 - (post_lockdown_means$global[1:6] + 0.3*post_lockdown_means$work[1:6] + 0.25*delta_school + 0.1*delta_leisure)/ pre_lockdown_means$global[1:6]
+scenario_B
+```
+
+## Scenario C:
+
+```{r}
+scenario_C = 1 - (post_lockdown_means$global[1:6] + 0.3*post_lockdown_means$work[1:6] + 0.5*delta_school + 0.1*delta_leisure)/ pre_lockdown_means$global[1:6]
+scenario_C
+```
+
+
+## Scenario D:
+
+```{r}
+scenario_D = 1 - (post_lockdown_means$global[1:6] + 0.4*post_lockdown_means$work[1:6] + 0.6*delta_school + 0.3*delta_leisure)/ pre_lockdown_means$global[1:6]
+scenario_D
+```
+
+```{r}
+scenario_E = 1 - (post_lockdown_means$global[1:6] + 0.5*post_lockdown_means$work[1:6] + delta_school + 0.75*delta_leisure)/ pre_lockdown_means$global[1:6]
+scenario_E
+```
+
+## Scenario E:
+
+
+```{r}
+A=round(scenario_A, 3)
+B=round(scenario_B, 3)
+C=round(scenario_C, 3)
+D=round(scenario_D, 3)
+E=round(scenario_E, 3)
+
+rbind(append("A", A),
+append("B", B),
+append("C", C),
+append("D", D),
+append("E", E))
+```
+
+
+By household size.
+
+```{r}
+summary = model_data_no_multiple %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_home)) %>%
+  summarize(prop_within_house = mean(cnt_home), n = n())
+summary
+prop_within_house <- as.numeric(unlist(summary[1]))
+```
+
+
+
+```{r}
+uk_data
+```
+
+
+
+```{r}
+uk_data %>%
+  filter(!is.na(local)) %>%
+  group_by(hh_size) %>%
+  summarise(sum(local), sum(!local))
+```
+
+
+Prop work contacts
+
+```{r}
+summary = uk_data %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_work)) %>%
+  summarize(prop_work = mean(cnt_work), n = n())
+prop_work <- unlist(as.numeric(summary[1]))
+
+summary = uk_data %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_work)) %>%
+  summarize(sum_work = sum(cnt_work), n = n())
+mean.work <-mean(as.numeric(unlist(summary[2])))
+```
+ 
+ Transport (add in to work)
+
+```{r}
+summary = uk_data %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_transport)) %>%
+  summarize(prop_transport = mean(cnt_transport), n = n())
+summary
+prop_transport <- unlist(as.numeric(summary[1]))
+
+summary = uk_data %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_transport)) %>%
+  summarize(sum_transport = sum(cnt_transport), n = n())
+mean.transport <-mean(as.numeric(unlist(summary[2])))
+```
+
+
+By household, prop school contacts.
+
+```{r}
+summary = uk_data %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_school)) %>%
+  summarize(prop_school = mean(cnt_school), n = n())
+summary[1]
+prop_school <- unlist(as.numeric(summary[1]))
+
+summary = uk_data %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_school)) %>%
+  summarize(sum_school = sum(cnt_school), n = n())
+mean.school <-mean(as.numeric(unlist(summary[2])))
+```
+
+
+```{r}
+summary = uk_data %>%
+# group_by(hh_size) %>%
+  filter(!is.na(cnt_leisure)) %>%
+  summarize(prop_leisure = mean(cnt_leisure), n = n())
+prop_leisure <- unlist(as.numeric(summary[1]))
+
+summary = uk_data %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_leisure)) %>%
+  summarize(sum_leisure = sum(cnt_leisure), n = n())
+mean.leisure <-mean(as.numeric(unlist(summary[2])))
+```
+
+```{r}
+# Creating the name vector
+types <- c("work_travel","school","leisure")
+poly_prop <- c((prop_work+prop_transport), prop_school, prop_leisure)
+pop <- poly_prop/(1-prop_within_house)
+poly_num <- c((mean.work+mean.transport),mean.school, mean.leisure)
+red_num <- 0.2*poly_num
+num_now <- c(0.6,0,0)
+current <- c(0.5,0,0)*pop
+may <- c((1.2*num_now[1]), 0.11*poly_num[2], 0*poly_num[3])
+jun <- c((1.2*1.1*num_now[1]), 0.25*poly_num[2], 0.1*poly_num[3])
+jul <- c((1.2*1.1^2*num_now[1]), 0.60*poly_num[2], 0.3*poly_num[3])
+aug <- c((1.2*1.1^3*num_now[1]), 1*poly_num[2], 0.75*poly_num[3])
+
+# These give projected NUMBERS of contacts for each scenario month by type
+## (Gave up trying to work entirely with proportions, so working woth mean numbers of contacts instead)
+## Had to assume 10% of usual (ie polymod) leisure compared to now because we are assuming leisure is currently 0
+## Looks like about 0.6 work contacts right now person according to CoMix
+scen1 <- cbind.data.frame(types, poly_num, red_num, num_now, poly_prop, pop, current, may, jun, jul, aug)
+
+jun2 <- c((1.2*1.1*num_now[1]), 0.5*poly_num[2], 0.1*poly_num[3])
+
+scen2 <- cbind.data.frame(types, poly_num, red_num, num_now, poly_prop, pop, current, may, jun2, jul, aug)
+
+#Numbers of outside contacts per type
+
+adults1 <- cbind(may[-2], jun[-2], jul[-2], aug[-2])
+chil1 <- cbind(may[-1], jun[-1], jul[-1], aug[-1])
+tot.adult1 <- colSums(adults1)
+tot.chil1 <- colSums(chil1)
+
+adults2 <- cbind(may[-2], jun2[-2], jul[-2], aug[-2])
+chil2 <- cbind(may[-1], jun2[-1], jul[-1], aug[-1])
+tot.adult2 <- colSums(adults2)
+tot.chil2 <- colSums(chil2)
+
+hh1.1 <- tot.adult1
+hh2.1 <- 2*tot.adult1
+hh3.1 <- hh2.1+tot.chil1
+hh4.1 <- hh3.1+tot.chil1
+hh5.1 <- hh4.1+tot.chil1
+hh6.1 <- hh5.1+tot.chil1
+
+scen1.contacts<- data.frame(matrix(as.numeric(unlist(rbind(hh1.1, hh2.1, hh3.1, hh4.1, hh5.1, hh6.1))), ncol=4))
+colnames(scen1.contacts) <- c("may", "jun", "jul", "aug")
+rownames(scen1.contacts) <- c("hh1", "hh2", "hh3", "hh4", "hh5", "hh6")
+
+hh1.2 <- tot.adult2
+hh2.2 <- 2*tot.adult2
+hh3.2 <- hh2.2+tot.chil2
+hh4.2 <- hh3.2+tot.chil2
+hh5.2 <- hh4.2+tot.chil2
+hh6.2 <- hh5.2+tot.chil2
+
+scen2.contacts<- data.frame(matrix(as.numeric(unlist(rbind(hh1.2, hh2.2, hh3.2, hh4.2, hh5.2, hh6.2))), ncol=4))
+colnames(scen2.contacts) <- c("may", "jun", "jul", "aug")
+rownames(scen2.contacts) <- c("hh1", "hh2", "hh3", "hh4", "hh5", "hh6")
+
+write.csv(scen1.contacts,"Data/scen1_mean_contacts.csv", row.names = T)
+
+write.csv(scen2.contacts,"Data/scen2_mean_contacts.csv", row.names = T)
+
+
+
+```

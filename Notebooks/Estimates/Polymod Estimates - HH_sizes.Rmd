@@ -1,0 +1,97 @@
+---
+title: "Estmates from the POLYMOD Social Contact Survey"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(socialmixr)
+```
+
+We need to obtain several estimates from Polymod to parameterise our model. In particular, we are interested in the mean number of contacts made by households of different sizes, and the proportion of contacts that occur within household.
+
+```{r}
+data(polymod)
+contacts = polymod$contacts
+participants = polymod$participants
+```
+
+
+```{r}
+# Join the participant data frame to the dataframe that stores contact data on the participant ID and filter to the United Kingdom
+model_data = participants %>%
+  filter(country == "United Kingdom") %>%
+  left_join(contacts, by = "part_id") %>%
+  filter(hh_size == 1) %>%
+  select(part_id, hh_size, cnt_home, frequency_multi)
+```
+
+```{r}
+uk_ages = c(3924, 4120, 3956, 3686, 4075, 4484, 4707, 4588, 4308, 4296, 4635, 4539, 3905, 3382, 3388, 2442, 1737, 1078, 491, 130, 16)
+uk_age_props = uk_ages/sum(uk_ages)
+```
+
+Just want average number of global contacts, not stratifioed by household size
+
+```{r}
+UK_HH_size_all = polymod
+UK_HH_size_all$participants = UK_HH_size_all$participants %>%
+  filter(country == "United Kingdom")
+#  filter(hh_size == 1)
+contact_matrix_all = contact_matrix(UK_HH_size_all, age.limits = c(0, 100))
+contact_matrix_all$matrix[1]
+```
+
+```{r}
+UK_HH_size_1 = polymod
+UK_HH_size_1$participants = UK_HH_size_1$participants %>%
+  filter(country == "United Kingdom") %>%
+  filter(hh_size == 1)
+contact_matrix_1 = contact_matrix(UK_HH_size_1, age.limits = c(0, 100))
+contact_matrix_1$matrix[1]
+```
+
+```{r}
+UK_HH_size_2 = polymod
+UK_HH_size_2$participants = UK_HH_size_2$participants %>%
+  filter(country == "United Kingdom") %>%
+  filter(hh_size == 2)
+contact_matrix_2 = contact_matrix(UK_HH_size_2, age.limits = c(0, 80))
+contact_matrix_2$matrix[1]
+```
+
+```{r}
+UK_HH_size_3 = polymod
+UK_HH_size_3$participants = UK_HH_size_3$participants %>%
+  filter(country == "United Kingdom") %>%
+  filter(hh_size == 3)
+contact_matrix_3 = contact_matrix(UK_HH_size_3, age.limits = c(0, 80))
+contact_matrix_3$matrix[1]
+```
+
+```{r}
+UK_HH_size_4 = polymod
+UK_HH_size_4$participants = UK_HH_size_4$participants %>%
+  filter(country == "United Kingdom") %>%
+  filter(hh_size == 4)
+contact_matrix_4 = contact_matrix(UK_HH_size_4, age.limits = c(0, 80))
+contact_matrix_4$matrix[1]
+```
+
+```{r}
+UK_HH_size_5 = polymod
+UK_HH_size_5$participants = UK_HH_size_5$participants %>%
+  filter(country == "United Kingdom") %>%
+  filter(hh_size == 5)
+contact_matrix_5 = contact_matrix(UK_HH_size_5, age.limits = c(0, 80))
+contact_matrix_5$matrix[1]
+```
+
+```{r}
+UK_HH_size_6 = polymod
+UK_HH_size_6$participants = UK_HH_size_6$participants %>%
+  filter(country == "United Kingdom") %>%
+  filter(hh_size == 6)
+contact_matrix_6 = contact_matrix(UK_HH_size_6, age.limits = c(0, 80))
+contact_matrix_6$matrix[1]
+```
